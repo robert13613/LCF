@@ -1,0 +1,17 @@
+## Setup dell'Ambiente Virtuale e Librerie (Backend)
+
+Poiché l'ambiente virtuale non viene caricato su GitHub, ogni membro del team deve crearlo sul proprio computer la prima volta che scarica il progetto.
+
+### 1. Creare l'ambiente virtuale (Da fare solo la prima volta)
+Apri il terminale, spostati nella cartella `Backend` e crea la tua "bolla" virtuale.
+
+**🍎 Su Mac / Linux:**
+```bash
+cd Backend
+python3 -m venv venvBackend
+
+🪟 Su Windows:
+
+Bash
+cd Backend
+python -m venv venvBackend
