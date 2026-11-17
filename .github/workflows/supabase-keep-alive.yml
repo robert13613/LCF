@@ -1,0 +1,15 @@
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: 
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Esegui Ping verso Supabase
+        run: |
+          curl -I -X GET "https://pknztwrfxpspqtjlrcpk.supabase.co/rest/v1/"
+          echo "Ping inviato con successo!"

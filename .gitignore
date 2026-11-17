@@ -1,2 +1,44 @@
+# ==========================================
+# AMBIENTI E SEGRETI
+# ==========================================
 venvBackend/
 .env
+.env.*
+secrets/
+
+# ==========================================
+# 🛑 SICUREZZA E DATI PERSONALI (GDPR)
+# ==========================================
+# Blocca i file dati reali del committente per evitare data breach accidentali
+*.xlsx
+*.xls
+*.docx
+*.csv
+*.json
+
+# Eccezione: consenti solo i file di mock (de-commenta se necessario)
+# !mock_data.json 
+
+# ==========================================
+# 🐍 PYTHON (Backend & Pipeline Dati)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+
+# ==========================================
+# 🟢 NODE.JS (Frontend App Web)
+# ==========================================
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
