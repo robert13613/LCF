@@ -1,0 +1,52 @@
+nome_grezzo,categoria,peso_stimato_kg_per_pz
+Verdura fresca,Verdura fresca,
+Verdura,Verdura fresca,
+verdure,Verdura fresca,
+Ortaggi,Verdura fresca,
+Carne e affettati confezionati,Carne e affettati confezionati,
+Carne confezionata,Carne e affettati confezionati,
+Salumi,Carne e affettati confezionati,
+affettati,Carne e affettati confezionati,
+Latticini freschi,Latticini freschi,
+latticini,Latticini freschi,
+Formaggi/yogurt,Latticini freschi,
+Yogurt,Latticini freschi,
+Pane e prodotti da forno,Pane e prodotti da forno,
+Pane,Pane e prodotti da forno,
+pane,Pane e prodotti da forno,
+Prodotti da forno,Pane e prodotti da forno,
+Frutta fresca,Frutta fresca,
+Frutta,Frutta fresca,
+frutta,Frutta fresca,
+Latte UHT,Latte UHT,1.0
+latte uht,Latte UHT,1.0
+Latte,Latte UHT,1.0
+Pomodori pelati e passata,Pomodori pelati e passata,0.5
+Passata di pomodoro,Pomodori pelati e passata,0.5
+Pelati,Pomodori pelati e passata,0.5
+pomodoro,Pomodori pelati e passata,0.5
+Legumi in scatola,Legumi in scatola,0.4
+legumi scatola,Legumi in scatola,0.4
+Legumi,Legumi in scatola,0.4
+Fagioli/ceci,Legumi in scatola,0.4
+Pasta secca,Pasta secca,
+Pasta secca (kg),Pasta secca,
+Pasta,Pasta secca,
+pasta,Pasta secca,
+Riso,Riso,
+Riso confezionato,Riso,
+riso,Riso,
+Igiene personale,Igiene personale,0.3
+igiene persona,Igiene personale,0.3
+Igiene,Igiene personale,0.3
+Saponi/shampoo,Igiene personale,0.3
+Olio di semi,Olio di semi,0.92
+Olio,Olio di semi,0.92
+olio,Olio di semi,0.92
+Biscotti e merendine,Biscotti e merendine,
+Biscotti/merende,Biscotti e merendine,
+Biscotti,Biscotti e merendine,
+merendine,Biscotti e merendine,
+Detersivi e prodotti casa,Detersivi e prodotti casa,1.0
+Detersivi,Detersivi e prodotti casa,1.0
+Prodotti pulizia,Detersivi e prodotti casa,1.0
