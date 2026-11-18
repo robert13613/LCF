@@ -1,0 +1,791 @@
+openapi: 3.0.3
+info:
+  title: Buby Solidale – Contratto API
+  version: 0.1.0-bozza
+  description: |
+    Contratto tra il team dati (DAI) e il team web (WSA) per l'app "bollettino del lunedì".
+
+    **Regole comuni**
+    - Tutte le risposte sono JSON, nomi dei campi in italiano e in minuscolo con `_`.
+    - Date nel formato `AAAA-MM-GG`, mesi nel formato `AAAA-MM`, istanti in ISO 8601 con fuso orario.
+    - I pesi sono sempre in **kg** (un decimale), le probabilità e i tassi sono numeri **tra 0 e 1**.
+    - Il parametro `settimana` è sempre il **lunedì** della settimana (giorno della rilevazione delle giacenze).
+      Se manca, il backend usa l'ultima settimana presente nel database.
+    - I codici di punti, volontari, donatori e beneficiari sono quelli pseudonimizzati (PR03, V017, D012, B0042).
+      Il campo `nome` di un volontario è presente solo se chi chiama ha il ruolo `coordinatore`; per gli altri è `null`.
+    - I testi dei messaggi escono solo anonimizzati.
+    - Gli errori hanno sempre la forma `{"errore": {"codice": ..., "messaggio": ...}}`.
+
+    **Da dove vengono i dati**: ogni campo indica tra parentesi la tabella o la vista dello schema
+    (v0.4 + aggiunte v0.5). Il team dati scrive le tabelle, il backend le legge e le restituisce in questa forma.
+
+    **Esempi**: codici e date sono reali (es. PR03, settimana del 26/10/2026), ma i numeri sono illustrativi.
+    Il server di risposte finte (Prism) restituisce questi esempi: non vanno presentati come risultati.
+
+    **Autenticazione**: login e ruoli li definisce Mattia in settimana 2; in questa bozza le richieste non la richiedono.
+
+    Stato: bozza v0.1 del 18/11/2026 (Alberto). Si congela dopo la SAL; da lì ogni modifica la approvano Alberto e Mattia.
+servers:
+  - url: http://localhost:8000
+    description: backend in locale
+  - url: http://127.0.0.1:4010
+    description: server di risposte finte (Prism)
+tags:
+  - name: Comuni
+    description: Dati di riferimento per menu a tendina e filtri
+  - name: Scadenze
+    description: Schermata Scadenze e Salva-scadenze
+  - name: Turni
+    description: Schermata Turni e gestione delle sostituzioni
+  - name: Impatto
+    description: Schermata Impatto
+  - name: Messaggi
+    description: Schermata Messaggi
+  - name: Donazioni
+    description: Form di inserimento di una donazione
+
+paths:
+  /api/anagrafiche:
+    get:
+      tags: [Comuni]
+      operationId: leggiAnagrafiche
+      summary: Punti di ritiro, categorie e settimane disponibili
+      description: Si chiama una volta all'apertura dell'app per riempire filtri e menu.
+      responses:
+        '200':
+          description: Dati di riferimento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Anagrafiche'
+              example:
+                punti:
+                  - { id: PR01, nome: Punto Barriera, comune: Torino, frigorifero: true, capienza_kg: 1200.0 }
+                  - { id: PR03, nome: Punto Moncalieri, comune: Moncalieri, frigorifero: true, capienza_kg: 700.0 }
+                  - { id: PR06, nome: Punto Nichelino, comune: Nichelino, frigorifero: false, capienza_kg: null }
+                categorie:
+                  - { id: 1, nome: Pasta secca, macro: alimentare, unita_standard: kg, deperibile: false, richiede_frigo: false }
+                  - { id: 9, nome: Verdura fresca, macro: alimentare, unita_standard: kg, deperibile: true, richiede_frigo: false }
+                  - { id: 11, nome: Latticini freschi, macro: alimentare, unita_standard: kg, deperibile: true, richiede_frigo: true }
+                  - { id: 14, nome: Igiene personale, macro: prima_necessita, unita_standard: pz, deperibile: false, richiede_frigo: false }
+                settimane: { prima: '2025-09-01', ultima: '2026-10-26' }
+
+  /api/scadenze:
+    get:
+      tags: [Scadenze]
+      operationId: leggiScadenze
+      summary: Lista FEFO – cosa distribuire per primo in un punto
+      description: |
+        Giacenze del lunedì ordinate per giorni alla scadenza (prima le più urgenti).
+        Le righe con 0 kg non compaiono. Include la previsione della settimana successiva per il punto.
+
+        Livelli di urgenza (soglie nella tabella `parametro`):
+        `scaduta` = scadenza già passata · `alta` = 0–2 giorni · `media` = 3–7 giorni ·
+        `bassa` = oltre 7 giorni · `nessuna` = prodotto senza scadenza.
+      parameters:
+        - $ref: '#/components/parameters/PuntoObbligatorio'
+        - $ref: '#/components/parameters/Settimana'
+      responses:
+        '200':
+          description: Lista FEFO del punto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scadenze'
+              example:
+                punto_id: PR03
+                settimana: '2026-10-26'
+                righe:
+                  - { categoria_id: 9, categoria: Verdura fresca, kg: 1.7, kg_stimato: false, scadenza_piu_vicina: '2026-10-26', giorni_alla_scadenza: 0, urgenza: alta, richiede_frigo: false }
+                  - { categoria_id: 6, categoria: Latte UHT, kg: 228.0, kg_stimato: true, scadenza_piu_vicina: '2026-10-29', giorni_alla_scadenza: 3, urgenza: media, richiede_frigo: false }
+                  - { categoria_id: 12, categoria: Carne e affettati confezionati, kg: 0.1, kg_stimato: false, scadenza_piu_vicina: '2026-10-29', giorni_alla_scadenza: 3, urgenza: media, richiede_frigo: true }
+                  - { categoria_id: 8, categoria: Biscotti e merendine, kg: 106.1, kg_stimato: false, scadenza_piu_vicina: '2027-01-08', giorni_alla_scadenza: 74, urgenza: bassa, richiede_frigo: false }
+                  - { categoria_id: 14, categoria: Igiene personale, kg: 66.5, kg_stimato: true, scadenza_piu_vicina: null, giorni_alla_scadenza: null, urgenza: nessuna, richiede_frigo: false }
+                totali: { kg_in_giacenza: 402.4, kg_urgenza_alta: 1.7, kg_scaduti: 0.0 }
+                previsione_settimana_successiva:
+                  donato_kg: 310.0
+                  distribuito_kg: 290.0
+                  modello: media_4_settimane
+        '400': { $ref: '#/components/responses/RichiestaNonValida' }
+        '404': { $ref: '#/components/responses/NonTrovato' }
+
+  /api/trasferimenti:
+    get:
+      tags: [Scadenze]
+      operationId: leggiTrasferimenti
+      summary: Trasferimenti suggeriti (Salva-scadenze)
+      description: |
+        Merce che rischia di scadere prima di essere distribuita nel punto dove si trova, con il punto
+        di destinazione suggerito e il messaggio già scritto per i volontari.
+        Il pulsante "Avvisa i volontari" in questa versione copia `messaggio_volontari`: non scrive nulla.
+        Se `punto` è indicato, restituisce i trasferimenti in uscita o in entrata per quel punto.
+      parameters:
+        - $ref: '#/components/parameters/PuntoFacoltativo'
+        - $ref: '#/components/parameters/Settimana'
+      responses:
+        '200':
+          description: Trasferimenti suggeriti della settimana
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trasferimenti'
+              example:
+                settimana: '2026-10-26'
+                trasferimenti:
+                  - id: 57
+                    da_punto_id: PR04
+                    a_punto_id: PR01
+                    categoria_id: 11
+                    categoria: Latticini freschi
+                    kg: 18.5
+                    scadenza_piu_vicina: '2026-10-30'
+                    motivo: "PR04 non ha il frigorifero e la prossima apertura è venerdì; PR01 ha frigorifero e domanda prevista più alta."
+                    messaggio_volontari: "Ciao! Al Punto Collegno ci sono circa 18 kg di latticini che scadono giovedì. Serve qualcuno che li porti al Punto Barriera entro mercoledì. Chi riesce?"
+                    volontari_suggeriti:
+                      - { volontario_id: V012, nome: null }
+                      - { volontario_id: V027, nome: null }
+                    stato: suggerito
+        '400': { $ref: '#/components/responses/RichiestaNonValida' }
+
+  /api/turni:
+    get:
+      tags: [Turni]
+      operationId: leggiTurni
+      summary: Turni della settimana con il rischio di restare scoperti
+      description: |
+        Turni (punto + data + fascia) della settimana con i volontari assegnati e, per ognuno,
+        la probabilità stimata che il turno resti scoperto.
+        Livelli di rischio (soglie nella tabella `parametro`): `alto` ≥ 0,30 · `medio` 0,15–0,30 · `basso` < 0,15.
+        Turni ordinati per data e fascia; nella schermata si evidenziano quelli con `rischio_massimo` alto.
+      parameters:
+        - $ref: '#/components/parameters/PuntoFacoltativo'
+        - $ref: '#/components/parameters/Settimana'
+      responses:
+        '200':
+          description: Turni della settimana
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Turni'
+              example:
+                settimana: '2026-10-26'
+                riepilogo: { turni: 22, assegnazioni: 79, rischio_alto: 4, rischio_medio: 9 }
+                turni:
+                  - turno_id: 1702
+                    punto_id: PR03
+                    data: '2026-10-28'
+                    fascia: pomeriggio
+                    ora_inizio: '14:30'
+                    ora_fine: '18:30'
+                    rischio_massimo: alto
+                    assegnazioni:
+                      - { assegnazione_id: T04424, volontario_id: V010, nome: null, stato: coperto, ore_pianificate: 4.0, probabilita_scoperto: 0.06, rischio: basso }
+                      - { assegnazione_id: T04425, volontario_id: V017, nome: null, stato: scoperto, ore_pianificate: 4.0, probabilita_scoperto: 0.41, rischio: alto }
+        '400': { $ref: '#/components/responses/RichiestaNonValida' }
+
+  /api/assegnazioni/{assegnazione_id}/sostituti:
+    get:
+      tags: [Turni]
+      operationId: leggiSostituti
+      summary: Classifica dei sostituti per un'assegnazione a rischio
+      description: |
+        Volontari suggeriti per sostituire chi rischia di mancare, dal più adatto.
+        `punteggio` va da 0 a 1; `motivi` sono frasi brevi da mostrare così come sono.
+        Sono esclusi i volontari già assegnati allo stesso turno o a un altro turno nella stessa fascia.
+      parameters:
+        - $ref: '#/components/parameters/AssegnazioneId'
+      responses:
+        '200':
+          description: Sostituti in ordine di punteggio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sostituti'
+              example:
+                assegnazione_id: T04425
+                volontario_id: V017
+                turno: { turno_id: 1702, punto_id: PR03, data: '2026-10-28', fascia: pomeriggio, ora_inizio: '14:30', ora_fine: '18:30' }
+                sostituti:
+                  - { posizione: 1, volontario_id: V024, nome: null, punteggio: 0.87, motivi: ["Punto preferito PR03", "9 turni negli ultimi 3 mesi", "Presente nel 96% dei turni"] }
+                  - { posizione: 2, volontario_id: V003, nome: null, punteggio: 0.74, motivi: ["Ha già fatto turni a PR03", "Presente nel 92% dei turni"] }
+                  - { posizione: 3, volontario_id: V038, nome: null, punteggio: 0.61, motivi: ["Punto preferito PR03"] }
+        '404': { $ref: '#/components/responses/NonTrovato' }
+
+  /api/assegnazioni/{assegnazione_id}/sostituzione:
+    post:
+      tags: [Turni]
+      operationId: registraSostituzione
+      summary: Registra chi sostituisce il volontario assegnato
+      description: |
+        Usato dal form di gestione dei turni. Imposta `stato = sostituito` e `sostituto_id` sull'assegnazione.
+        È una scrittura operativa dell'app (non un risultato del team dati).
+      parameters:
+        - $ref: '#/components/parameters/AssegnazioneId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuovaSostituzione'
+            example: { sostituto_id: V024 }
+      responses:
+        '200':
+          description: Assegnazione aggiornata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assegnazione'
+              example: { assegnazione_id: T04425, volontario_id: V017, nome: null, stato: sostituito, sostituto_id: V024, ore_pianificate: 4.0, probabilita_scoperto: 0.41, rischio: alto }
+        '404': { $ref: '#/components/responses/NonTrovato' }
+        '409':
+          description: L'assegnazione ha già un sostituto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errore' }
+              example: { errore: { codice: gia_sostituito, messaggio: "T04425 è già stata sostituita da V003." } }
+        '422':
+          description: Sostituto non valido (stesso volontario, inattivo o già impegnato nella stessa fascia)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errore' }
+              example: { errore: { codice: sostituto_non_valido, messaggio: "V010 è già assegnato a questo turno." } }
+
+  /api/impatto:
+    get:
+      tags: [Impatto]
+      operationId: leggiImpatto
+      summary: Numeri di impatto sociale e andamento mensile
+      description: |
+        Totali del periodo e serie mensile. Senza `punto` i numeri sono di tutta la rete.
+        Le persone raggiunte sono una fotografia delle schede attive al 31/10/2026 (non esiste uno storico mensile).
+      parameters:
+        - name: da
+          in: query
+          description: Primo mese incluso (AAAA-MM). Se manca, settembre 2025.
+          schema: { type: string, pattern: '^\d{4}-\d{2}$', example: '2025-09' }
+        - name: a
+          in: query
+          description: Ultimo mese incluso (AAAA-MM). Se manca, l'ultimo mese con dati.
+          schema: { type: string, pattern: '^\d{4}-\d{2}$', example: '2026-10' }
+        - $ref: '#/components/parameters/PuntoFacoltativo'
+      responses:
+        '200':
+          description: Impatto del periodo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Impatto'
+              example:
+                periodo: { da: '2025-09', a: '2026-10' }
+                punto_id: null
+                totali:
+                  kg_recuperati: 98450.0
+                  kg_distribuiti_stimati: 91200.0
+                  kg_scartati: 3120.0
+                  tasso_spreco: 0.032
+                  pasti_equivalenti: 162300
+                  ore_volontariato: 15880.0
+                  tasso_scopertura_turni: 0.095
+                  nuclei_attivi: 351
+                  persone_raggiunte: 1340
+                  minori_raggiunti: 360
+                mensile:
+                  - { mese: '2025-09', kg_recuperati: 6950.0, kg_distribuiti_stimati: 6400.0, kg_scartati: 230.0, pasti_equivalenti: 11400, ore_volontariato: 1120.0, tasso_scopertura_turni: 0.08 }
+                  - { mese: '2025-10', kg_recuperati: 7210.0, kg_distribuiti_stimati: 6720.0, kg_scartati: 245.0, pasti_equivalenti: 11980, ore_volontariato: 1150.0, tasso_scopertura_turni: 0.07 }
+                ipotesi:
+                  kg_per_pasto: 0.5
+                  note:
+                    - "Le distribuzioni sono stimate con il bilancio di magazzino (giacenza iniziale + donato − scartato − giacenza finale)."
+                    - "Gli scarti sono una stima minima: alcuni punti li registrano meno degli altri."
+                    - "I pezzi sono convertiti in kg con un peso medio per categoria."
+        '400': { $ref: '#/components/responses/RichiestaNonValida' }
+
+  /api/messaggi:
+    get:
+      tags: [Messaggi]
+      operationId: leggiMessaggi
+      summary: Messaggi anonimizzati e classificati per categoria
+      description: |
+        Elenco paginato dei messaggi (dal più recente) con la categoria assegnata dal classificatore
+        e, per le email dei donatori, i dati estratti. Comprende sempre il conteggio per categoria
+        sull'intero filtro (per il grafico in alto nella schermata).
+        Le note degli operatori sociali sono escluse se chi chiama non è `coordinatore`.
+      parameters:
+        - name: categoria
+          in: query
+          description: Filtra per categoria predetta.
+          schema: { $ref: '#/components/schemas/CategoriaMessaggio' }
+        - name: fonte
+          in: query
+          schema: { type: string, enum: [email, chat_volontari, nota_operatore, recensione] }
+        - name: da
+          in: query
+          schema: { type: string, format: date, example: '2026-10-01' }
+        - name: a
+          in: query
+          schema: { type: string, format: date, example: '2026-10-31' }
+        - name: pagina
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_pagina
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Messaggi del filtro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Messaggi'
+              example:
+                totale: 48
+                pagina: 1
+                per_pagina: 20
+                conteggi_per_categoria:
+                  - { categoria: offerta_donazione, n: 14 }
+                  - { categoria: disponibilita_turni, n: 11 }
+                  - { categoria: logistica, n: 9 }
+                  - { categoria: ringraziamento, n: 8 }
+                  - { categoria: reclamo, n: 6 }
+                messaggi:
+                  - id: 311
+                    fonte: email
+                    ricevuto_il: '2026-10-27T09:12:00+01:00'
+                    autore_ruolo: donatore
+                    oggetto: Disponibilità yogurt
+                    testo_anonimizzato: "Buongiorno, sono [NOME] del supermercato. Abbiamo 40 vasetti di yogurt in scadenza il 3/11, potete passare giovedì? Per info [TELEFONO]."
+                    categoria_predetta: offerta_donazione
+                    confidenza: 0.91
+                    entita_estratte: { prodotto: yogurt, quantita: 40, unita: pz, data: '2026-11-03' }
+        '400': { $ref: '#/components/responses/RichiestaNonValida' }
+
+  /api/donazioni:
+    post:
+      tags: [Donazioni]
+      operationId: creaDonazione
+      summary: Inserisce una nuova donazione offerta
+      description: |
+        Il backend crea la donazione con `canale = app` e `stato_corrente = offerta`, una riga per prodotto
+        e la prima riga nello storico degli stati. I kg si calcolano così: se l'unità è `kg` coincidono con la
+        quantità; se è `pz` si usa il peso medio della categoria e `kg_stimato` diventa `true`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuovaDonazione'
+            example:
+              donatore_id: D012
+              punto_id: PR03
+              data: '2026-11-19'
+              righe:
+                - { categoria_id: 11, prodotto: Yogurt bianco, quantita: 40, unita: pz }
+                - { categoria_id: 9, prodotto: Insalata, quantita: 6.5, unita: kg }
+              nota: Ritiro giovedì pomeriggio
+      responses:
+        '201':
+          description: Donazione creata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Donazione'
+              example:
+                id: DON-10001
+                data: '2026-11-19'
+                donatore_id: D012
+                punto_id: PR03
+                canale: app
+                stato_corrente: offerta
+                kg_totali: 12.5
+                righe:
+                  - { categoria_id: 11, categoria: Latticini freschi, prodotto: Yogurt bianco, quantita: 40, unita: pz, kg: 6.0, kg_stimato: true }
+                  - { categoria_id: 9, categoria: Verdura fresca, prodotto: Insalata, quantita: 6.5, unita: kg, kg: 6.5, kg_stimato: false }
+        '422':
+          description: Dati non validi (punto o categoria inesistente, quantità non positiva, nessuna riga)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errore' }
+              example: { errore: { codice: dati_non_validi, messaggio: "La categoria 99 non esiste." } }
+
+components:
+  parameters:
+    PuntoObbligatorio:
+      name: punto
+      in: query
+      required: true
+      description: Codice del punto di ritiro.
+      schema: { $ref: '#/components/schemas/PuntoId' }
+    PuntoFacoltativo:
+      name: punto
+      in: query
+      required: false
+      description: Codice del punto di ritiro; se manca, tutti i punti.
+      schema: { $ref: '#/components/schemas/PuntoId' }
+    Settimana:
+      name: settimana
+      in: query
+      required: false
+      description: Lunedì della settimana (AAAA-MM-GG). Se manca, l'ultima settimana nel database. Se non è un lunedì → 400.
+      schema: { type: string, format: date, example: '2026-10-26' }
+    AssegnazioneId:
+      name: assegnazione_id
+      in: path
+      required: true
+      description: Codice dell'assegnazione (id_turno del file del committente).
+      schema: { type: string, pattern: '^T\d{5}$', example: T04425 }
+
+  responses:
+    RichiestaNonValida:
+      description: Parametro mancante o nel formato sbagliato
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Errore' }
+          example: { errore: { codice: parametro_non_valido, messaggio: "settimana deve essere un lunedì: 2026-10-27 è un martedì." } }
+    NonTrovato:
+      description: Punto, assegnazione o settimana inesistente
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Errore' }
+          example: { errore: { codice: non_trovato, messaggio: "Il punto PR09 non esiste." } }
+
+  schemas:
+    PuntoId:
+      type: string
+      pattern: '^PR\d{2}$'
+      example: PR03
+    VolontarioId:
+      type: string
+      pattern: '^V\d{3}$'
+      example: V017
+    Urgenza:
+      type: string
+      enum: [scaduta, alta, media, bassa, nessuna]
+    LivelloRischio:
+      type: string
+      enum: [alto, medio, basso]
+    CategoriaMessaggio:
+      type: string
+      description: Proposta di categorie; la lista definitiva la fissa Stefano con l'etichettatura manuale.
+      enum: [offerta_donazione, disponibilita_turni, logistica, richiesta_aiuto, reclamo, ringraziamento, altro]
+    Errore:
+      type: object
+      required: [errore]
+      properties:
+        errore:
+          type: object
+          required: [codice, messaggio]
+          properties:
+            codice: { type: string, example: parametro_non_valido }
+            messaggio: { type: string, description: "Frase leggibile da mostrare o registrare nei log." }
+
+    Anagrafiche:
+      type: object
+      required: [punti, categorie, settimane]
+      properties:
+        punti:
+          type: array
+          description: (punto_ritiro)
+          items:
+            type: object
+            required: [id, nome, comune, frigorifero]
+            properties:
+              id: { $ref: '#/components/schemas/PuntoId' }
+              nome: { type: string }
+              comune: { type: string }
+              frigorifero: { type: boolean }
+              capienza_kg: { type: number, nullable: true, description: "null se il committente non l'ha indicata" }
+        categorie:
+          type: array
+          description: (categoria_prodotto) le 14 categorie
+          items:
+            type: object
+            required: [id, nome, macro, unita_standard, deperibile, richiede_frigo]
+            properties:
+              id: { type: integer }
+              nome: { type: string }
+              macro: { type: string, enum: [alimentare, prima_necessita] }
+              unita_standard: { type: string, enum: [kg, pz] }
+              deperibile: { type: boolean }
+              richiede_frigo: { type: boolean }
+        settimane:
+          type: object
+          description: Primo e ultimo lunedì con giacenze (giacenza.data_rilevazione)
+          required: [prima, ultima]
+          properties:
+            prima: { type: string, format: date }
+            ultima: { type: string, format: date }
+
+    Scadenze:
+      type: object
+      required: [punto_id, settimana, righe, totali]
+      properties:
+        punto_id: { $ref: '#/components/schemas/PuntoId' }
+        settimana: { type: string, format: date }
+        righe:
+          type: array
+          description: (giacenza + categoria_prodotto) ordinate per giorni_alla_scadenza, null in fondo
+          items:
+            type: object
+            required: [categoria_id, categoria, kg, kg_stimato, scadenza_piu_vicina, giorni_alla_scadenza, urgenza, richiede_frigo]
+            properties:
+              categoria_id: { type: integer }
+              categoria: { type: string }
+              kg: { type: number, description: "Tutti i kg in giacenza della categoria, non solo quelli in scadenza" }
+              kg_stimato: { type: boolean, description: "true se convertito da pezzi con il peso medio" }
+              scadenza_piu_vicina: { type: string, format: date, nullable: true }
+              giorni_alla_scadenza: { type: integer, nullable: true, description: "scadenza_piu_vicina − settimana; negativo se già scaduta" }
+              urgenza: { $ref: '#/components/schemas/Urgenza' }
+              richiede_frigo: { type: boolean }
+        totali:
+          type: object
+          required: [kg_in_giacenza, kg_urgenza_alta, kg_scaduti]
+          properties:
+            kg_in_giacenza: { type: number }
+            kg_urgenza_alta: { type: number }
+            kg_scaduti: { type: number }
+        previsione_settimana_successiva:
+          type: object
+          nullable: true
+          description: (previsione) null se il modello non ha ancora scritto la previsione
+          properties:
+            donato_kg: { type: number }
+            distribuito_kg: { type: number }
+            modello: { type: string }
+
+    Trasferimenti:
+      type: object
+      required: [settimana, trasferimenti]
+      properties:
+        settimana: { type: string, format: date }
+        trasferimenti:
+          type: array
+          description: (trasferimento_suggerito, nuova in v0.5)
+          items:
+            type: object
+            required: [id, da_punto_id, a_punto_id, categoria_id, categoria, kg, motivo, messaggio_volontari, volontari_suggeriti, stato]
+            properties:
+              id: { type: integer }
+              da_punto_id: { $ref: '#/components/schemas/PuntoId' }
+              a_punto_id: { $ref: '#/components/schemas/PuntoId' }
+              categoria_id: { type: integer }
+              categoria: { type: string }
+              kg: { type: number }
+              scadenza_piu_vicina: { type: string, format: date, nullable: true }
+              motivo: { type: string }
+              messaggio_volontari: { type: string, description: "Testo pronto da copiare, senza nomi di persone" }
+              volontari_suggeriti:
+                type: array
+                items: { $ref: '#/components/schemas/VolontarioBreve' }
+              stato: { type: string, enum: [suggerito, avvisato, fatto, ignorato] }
+
+    VolontarioBreve:
+      type: object
+      required: [volontario_id, nome]
+      properties:
+        volontario_id: { $ref: '#/components/schemas/VolontarioId' }
+        nome: { type: string, nullable: true, description: "Solo per il ruolo coordinatore (schema riservato)" }
+
+    Assegnazione:
+      type: object
+      required: [assegnazione_id, volontario_id, nome, stato, ore_pianificate, probabilita_scoperto, rischio]
+      properties:
+        assegnazione_id: { type: string, example: T04425 }
+        volontario_id: { $ref: '#/components/schemas/VolontarioId' }
+        nome: { type: string, nullable: true }
+        stato: { type: string, enum: [pianificato, coperto, parziale, scoperto, sostituito] }
+        sostituto_id: { type: string, nullable: true }
+        ore_pianificate: { type: number }
+        probabilita_scoperto: { type: number, nullable: true, minimum: 0, maximum: 1, description: "(rischio_assegnazione, nuova in v0.5) null se manca la stima" }
+        rischio: { type: string, nullable: true, enum: [alto, medio, basso, null], description: "null se manca la stima" }
+
+    TurnoBreve:
+      type: object
+      required: [turno_id, punto_id, data, fascia, ora_inizio, ora_fine]
+      properties:
+        turno_id: { type: integer }
+        punto_id: { $ref: '#/components/schemas/PuntoId' }
+        data: { type: string, format: date }
+        fascia: { type: string, enum: [mattina, pomeriggio] }
+        ora_inizio: { type: string, example: '14:30' }
+        ora_fine: { type: string, example: '18:30' }
+
+    Turni:
+      type: object
+      required: [settimana, riepilogo, turni]
+      properties:
+        settimana: { type: string, format: date }
+        riepilogo:
+          type: object
+          required: [turni, assegnazioni, rischio_alto, rischio_medio]
+          properties:
+            turni: { type: integer }
+            assegnazioni: { type: integer }
+            rischio_alto: { type: integer, description: "Assegnazioni con rischio alto" }
+            rischio_medio: { type: integer }
+        turni:
+          type: array
+          description: (turno + assegnazione + rischio_assegnazione)
+          items:
+            allOf:
+              - $ref: '#/components/schemas/TurnoBreve'
+              - type: object
+                required: [rischio_massimo, assegnazioni]
+                properties:
+                  rischio_massimo: { type: string, nullable: true, enum: [alto, medio, basso, null], description: "Il rischio più alto tra le assegnazioni del turno" }
+                  assegnazioni:
+                    type: array
+                    items: { $ref: '#/components/schemas/Assegnazione' }
+
+    Sostituti:
+      type: object
+      required: [assegnazione_id, volontario_id, turno, sostituti]
+      properties:
+        assegnazione_id: { type: string }
+        volontario_id: { $ref: '#/components/schemas/VolontarioId' }
+        turno: { $ref: '#/components/schemas/TurnoBreve' }
+        sostituti:
+          type: array
+          description: (sostituto_suggerito, nuova in v0.5) al massimo 5, ordinati per posizione
+          items:
+            type: object
+            required: [posizione, volontario_id, nome, punteggio, motivi]
+            properties:
+              posizione: { type: integer, minimum: 1 }
+              volontario_id: { $ref: '#/components/schemas/VolontarioId' }
+              nome: { type: string, nullable: true }
+              punteggio: { type: number, minimum: 0, maximum: 1 }
+              motivi: { type: array, items: { type: string } }
+
+    NuovaSostituzione:
+      type: object
+      required: [sostituto_id]
+      properties:
+        sostituto_id: { $ref: '#/components/schemas/VolontarioId' }
+
+    Impatto:
+      type: object
+      required: [periodo, punto_id, totali, mensile, ipotesi]
+      properties:
+        periodo:
+          type: object
+          properties:
+            da: { type: string, example: '2025-09' }
+            a: { type: string, example: '2026-10' }
+        punto_id: { type: string, nullable: true, pattern: '^PR\d{2}$', description: "null = tutta la rete" }
+        totali:
+          type: object
+          required: [kg_recuperati, kg_distribuiti_stimati, kg_scartati, tasso_spreco, pasti_equivalenti, ore_volontariato, tasso_scopertura_turni, nuclei_attivi, persone_raggiunte, minori_raggiunti]
+          properties:
+            kg_recuperati: { type: number, description: "(v_impatto_mensile) kg donati" }
+            kg_distribuiti_stimati: { type: number, description: "(v_impatto_mensile) da bilancio di magazzino" }
+            kg_scartati: { type: number, description: "(v_impatto_mensile) stima minima" }
+            tasso_spreco: { type: number, nullable: true, description: "kg_scartati / kg_recuperati; null se non ci sono donazioni" }
+            pasti_equivalenti: { type: integer, description: "kg alimentari distribuiti / kg_per_pasto" }
+            ore_volontariato: { type: number, description: "somma di assegnazione.ore_effettive" }
+            tasso_scopertura_turni: { type: number, nullable: true, description: "(v_copertura_turni) scoperte / assegnazioni; null se non ci sono turni" }
+            nuclei_attivi: { type: integer, description: "(beneficiario) schede attive" }
+            persone_raggiunte: { type: integer, description: "somma n_componenti delle schede attive" }
+            minori_raggiunti: { type: integer, description: "somma n_minori delle schede attive (valori mancanti esclusi)" }
+        mensile:
+          type: array
+          items:
+            type: object
+            required: [mese, kg_recuperati, kg_distribuiti_stimati, kg_scartati, pasti_equivalenti, ore_volontariato, tasso_scopertura_turni]
+            properties:
+              mese: { type: string, example: '2025-09' }
+              kg_recuperati: { type: number }
+              kg_distribuiti_stimati: { type: number }
+              kg_scartati: { type: number }
+              pasti_equivalenti: { type: integer }
+              ore_volontariato: { type: number }
+              tasso_scopertura_turni: { type: number, nullable: true }
+        ipotesi:
+          type: object
+          description: Da mostrare come nota sotto i numeri
+          properties:
+            kg_per_pasto: { type: number }
+            note: { type: array, items: { type: string } }
+
+    Messaggi:
+      type: object
+      required: [totale, pagina, per_pagina, conteggi_per_categoria, messaggi]
+      properties:
+        totale: { type: integer }
+        pagina: { type: integer }
+        per_pagina: { type: integer }
+        conteggi_per_categoria:
+          type: array
+          items:
+            type: object
+            properties:
+              categoria: { $ref: '#/components/schemas/CategoriaMessaggio' }
+              n: { type: integer }
+        messaggi:
+          type: array
+          description: (messaggio)
+          items:
+            type: object
+            required: [id, fonte, ricevuto_il, testo_anonimizzato, categoria_predetta, confidenza]
+            properties:
+              id: { type: integer }
+              fonte: { type: string, enum: [email, chat_volontari, nota_operatore, recensione] }
+              ricevuto_il: { type: string, format: date-time }
+              autore_ruolo: { type: string, nullable: true, enum: [donatore, partner, ente_pubblico, volontario, operatore, visitatore, altro] }
+              oggetto: { type: string, nullable: true }
+              testo_anonimizzato: { type: string }
+              categoria_predetta: { type: string, nullable: true, description: "Una delle CategoriaMessaggio; null se il messaggio non è ancora classificato" }
+              confidenza: { type: number, nullable: true, minimum: 0, maximum: 1 }
+              entita_estratte:
+                type: object
+                nullable: true
+                description: Solo per le email dei donatori; ogni campo può essere null
+                properties:
+                  prodotto: { type: string, nullable: true }
+                  quantita: { type: number, nullable: true }
+                  unita: { type: string, nullable: true, enum: [kg, pz, null] }
+                  data: { type: string, format: date, nullable: true }
+
+    NuovaDonazione:
+      type: object
+      required: [punto_id, data, righe]
+      properties:
+        donatore_id: { type: string, nullable: true, pattern: '^D\d{3}$', description: "null per un donatore occasionale" }
+        punto_id: { $ref: '#/components/schemas/PuntoId' }
+        data: { type: string, format: date, description: "Data prevista di consegna o ritiro" }
+        righe:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [categoria_id, prodotto, quantita, unita]
+            properties:
+              categoria_id: { type: integer }
+              prodotto: { type: string, description: "Nome scritto dal donatore (diventa prodotto_originale)" }
+              quantita: { type: number, exclusiveMinimum: true, minimum: 0 }
+              unita: { type: string, enum: [kg, pz] }
+        nota: { type: string, nullable: true, description: "Salvata nello storico degli stati" }
+
+    Donazione:
+      type: object
+      required: [id, data, punto_id, canale, stato_corrente, kg_totali, righe]
+      properties:
+        id: { type: string, pattern: '^DON-\d{5}$' }
+        data: { type: string, format: date }
+        donatore_id: { type: string, nullable: true }
+        punto_id: { $ref: '#/components/schemas/PuntoId' }
+        canale: { type: string, enum: [storico, app, email, telefono] }
+        stato_corrente: { type: string, enum: [offerta, accettata, rifiutata, ritiro_programmato, ricevuta, annullata] }
+        kg_totali: { type: number }
+        righe:
+          type: array
+          items:
+            type: object
+            required: [categoria_id, categoria, prodotto, quantita, unita, kg, kg_stimato]
+            properties:
+              categoria_id: { type: integer }
+              categoria: { type: string }
+              prodotto: { type: string }
+              quantita: { type: number }
+              unita: { type: string, enum: [kg, pz] }
+              kg: { type: number }
+              kg_stimato: { type: boolean }
