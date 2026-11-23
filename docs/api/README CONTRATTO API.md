@@ -1,7 +1,7 @@
-# Contratto API – bozza v0.1 (18/11/2026)
+# Contratto API – bozza v0.2 (23/11/2026)
 
 Il contratto tra team dati (DAI) e team web (WSA): quali richieste fa l'app, con quali parametri,
-e quali campi riceve (nome, tipo, unità). Si congela dopo la SAL.
+e quali campi riceve (nome, tipo, unità). Si congela dopo l'approvazione di Mattia e Tommaso (card W1-09).
 
 ## Come leggerlo
 
@@ -15,13 +15,13 @@ e quali campi riceve (nome, tipo, unità). Si congela dopo la SAL.
 
 | File | A cosa serve | Chi lo usa |
 |---|---|---|
-| `openapi.yaml` | Il contratto: 9 richieste, campi, tipi, unità ed esempi. **È il file che fa fede** | tutti |
+| `openapi.yaml` | Il contratto: 12 richieste, campi, tipi, unità ed esempi. **È il file che fa fede** | tutti |
 | `contratto_api.html` | Versione leggibile generata da `openapi.yaml` (non si modifica a mano) | tutti |
 | `query_contratto.sql` | Una query SQL per richiesta, che restituisce già il JSON del contratto | Mattia (backend) |
 
-Lo schema del database a cui si riferisce il contratto è `docs/schema/buby_solidale_schema_v1.0.sql`.
+Lo schema del database a cui si riferisce il contratto è `docs/schema/buby_solidale_schema_v1.1.sql`.
 
-## Le 9 richieste
+## Le 12 richieste
 
 | Schermata | Richiesta | Cosa restituisce |
 |---|---|---|
@@ -32,8 +32,11 @@ Lo schema del database a cui si riferisce il contratto è `docs/schema/buby_soli
 | Turni | `GET /api/assegnazioni/T04425/sostituti` | classifica dei sostituti |
 | Turni | `POST /api/assegnazioni/T04425/sostituzione` | registra il sostituto |
 | Impatto | `GET /api/impatto?da=2025-09&a=2026-10&punto=` | totali e serie mensile, con le ipotesi |
-| Messaggi | `GET /api/messaggi?categoria=&pagina=` | messaggi anonimizzati e classificati |
+| Messaggi | `GET /api/messaggi?categoria=&punto=&pagina=` | messaggi anonimizzati e classificati, con sentiment e blocco "soddisfazione" (voto medio e distribuzione 1–5) |
 | Form donazione | `POST /api/donazioni` | crea una donazione con stato "offerta" |
+| Form feedback | `POST /api/feedback` | salva un feedback: chi lo dà, voto 1–5, punto e commento facoltativi |
+| Caricamento file | `POST /api/caricamenti` | registra un file di giacenze o scarti caricato dall'app (stato "in_attesa") |
+| Caricamento file | `GET /api/caricamenti` | elenco dei caricamenti con esito: righe lette, caricate, scartate ed errori |
 
 ## Come si usa nello sviluppo
 
@@ -45,11 +48,11 @@ Lo schema del database a cui si riferisce il contratto è `docs/schema/buby_soli
 ## Verifiche fatte
 
 - `openapi.yaml` è una specifica OpenAPI 3.0 valida.
-- Schema v1.0 caricato su PostgreSQL 16 con dati di prova: tutte le query girano e ogni risposta rispetta il contratto,
+- Schema v1.1 caricato su PostgreSQL 16 con dati di prova: tutte le query girano e ogni risposta rispetta il contratto,
   anche con ruolo non coordinatore (nomi nascosti, note degli operatori escluse).
 - Prism parte dal file e risponde con gli esempi; rifiuta le richieste senza i parametri obbligatori.
 
 ## Regole
 
-Dopo la SAL il contratto si congela (tag `v1.0` nel repository). Da lì nomi, tipi e unità dei campi
+Dopo l'approvazione (card W1-09) il contratto si congela (tag `v1.0` nel repository). Da lì nomi, tipi e unità dei campi
 non cambiano senza l'accordo di Alberto e Mattia.
