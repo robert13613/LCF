@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Buby Solidale – Contratto API
-  version: 0.1.0-bozza
+  version: 0.2.0-bozza
   description: |
     Contratto tra il team dati (DAI) e il team web (WSA) per l'app "bollettino del lunedì".
 
@@ -17,14 +17,17 @@ info:
     - Gli errori hanno sempre la forma `{"errore": {"codice": ..., "messaggio": ...}}`.
 
     **Da dove vengono i dati**: ogni campo indica tra parentesi la tabella o la vista dello schema
-    (v0.4 + aggiunte v0.5). Il team dati scrive le tabelle, il backend le legge e le restituisce in questa forma.
+    v1.0 (`docs/schema/buby_solidale_schema_v1.0.sql`) con le aggiunte v1.1 (`schema_v1.1_aggiunte.sql`). Il team dati scrive le tabelle, il backend le legge e le restituisce in questa forma.
 
     **Esempi**: codici e date sono reali (es. PR03, settimana del 26/10/2026), ma i numeri sono illustrativi.
     Il server di risposte finte (Prism) restituisce questi esempi: non vanno presentati come risultati.
 
     **Autenticazione**: login e ruoli li definisce Mattia in settimana 2; in questa bozza le richieste non la richiedono.
 
-    Stato: bozza v0.1 del 18/11/2026 (Alberto). Si congela dopo la SAL; da lì ogni modifica la approvano Alberto e Mattia.
+    Stato: bozza v0.2 del 20/11/2026 (Alberto). Novità rispetto alla v0.1:
+    - feedback dall'app e sentiment (`POST /api/feedback`, campi di sentiment e blocco `soddisfazione` in `GET /api/messaggi`);
+    - caricamento dei file settimanali di giacenze e scarti (`POST /api/caricamenti`, `GET /api/caricamenti`).
+    Si congela lunedì 23/11 dopo l'ok di Mattia e Tommaso; da lì ogni modifica la approvano Alberto e Mattia.
 servers:
   - url: http://localhost:8000
     description: backend in locale
@@ -40,9 +43,11 @@ tags:
   - name: Impatto
     description: Schermata Impatto
   - name: Messaggi
-    description: Schermata Messaggi
+    description: Schermata Messaggi, con la sezione Soddisfazione, e form di feedback
   - name: Donazioni
     description: Form di inserimento di una donazione
+  - name: Caricamenti
+    description: Caricamento dei file settimanali (giacenze, scarti) nell'area di staging e loro esito
 
 paths:
   /api/anagrafiche:
@@ -310,6 +315,10 @@ paths:
         e, per le email dei donatori, i dati estratti. Comprende sempre il conteggio per categoria
         sull'intero filtro (per il grafico in alto nella schermata).
         Le note degli operatori sociali sono escluse se chi chiama non è `coordinatore`.
+
+        Il blocco `soddisfazione` riassume voti e sentiment di recensioni e feedback dall'app
+        (stesso filtro di periodo e punto, ignora `categoria`, `fonte` e la paginazione):
+        serve alla sezione "Soddisfazione" della schermata.
       parameters:
         - name: categoria
           in: query
@@ -317,7 +326,8 @@ paths:
           schema: { $ref: '#/components/schemas/CategoriaMessaggio' }
         - name: fonte
           in: query
-          schema: { type: string, enum: [email, chat_volontari, nota_operatore, recensione] }
+          schema: { type: string, enum: [email, chat_volontari, nota_operatore, recensione, feedback_app] }
+        - $ref: '#/components/parameters/PuntoFacoltativo'
         - name: da
           in: query
           schema: { type: string, format: date, example: '2026-10-01' }
@@ -347,7 +357,27 @@ paths:
                   - { categoria: logistica, n: 9 }
                   - { categoria: ringraziamento, n: 8 }
                   - { categoria: reclamo, n: 6 }
+                soddisfazione:
+                  voto_medio: 3.9
+                  n_voti: 27
+                  sentiment: { negativo: 6, neutro: 5, positivo: 16 }
+                  mensile:
+                    - { mese: '2026-09', voto_medio: 3.6, n_voti: 9 }
+                    - { mese: '2026-10', voto_medio: 4.1, n_voti: 18 }
                 messaggi:
+                  - id: 412
+                    fonte: feedback_app
+                    ricevuto_il: '2026-10-29T17:40:00+01:00'
+                    autore_ruolo: beneficiario
+                    punto_id: PR03
+                    voto: 2
+                    oggetto: null
+                    testo_anonimizzato: "Abbiamo aspettato molto all'apertura, ma il personale è stato gentile."
+                    categoria_predetta: reclamo
+                    confidenza: 0.77
+                    sentiment: negativo
+                    sentiment_punteggio: -0.35
+                    entita_estratte: null
                   - id: 311
                     fonte: email
                     ricevuto_il: '2026-10-27T09:12:00+01:00'
@@ -357,7 +387,43 @@ paths:
                     categoria_predetta: offerta_donazione
                     confidenza: 0.91
                     entita_estratte: { prodotto: yogurt, quantita: 40, unita: pz, data: '2026-11-03' }
+                    punto_id: null
+                    voto: null
+                    sentiment: neutro
+                    sentiment_punteggio: 0.05
         '400': { $ref: '#/components/responses/RichiestaNonValida' }
+
+  /api/feedback:
+    post:
+      tags: [Messaggi]
+      operationId: inviaFeedback
+      summary: Invia un feedback anonimo (voto 1-5 e commento facoltativo)
+      description: |
+        Usato dal form di feedback di volontari, beneficiari, donatori e visitatori. È anonimo: non chiede né salva nomi.
+        Il backend salva il messaggio con `fonte = feedback_app` e, prima di salvarlo, toglie dal commento
+        telefoni, email e codici fiscali con le stesse regole dell'anonimizzazione (`[TELEFONO]`, `[EMAIL]`, `[CF]`).
+        Il lunedì la pipeline toglie anche i nomi di persona e calcola categoria e sentiment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuovoFeedback'
+            example: { ruolo_autore: beneficiario, punto_id: PR03, voto: 4, commento: "Personale gentile, ma la frutta era poca." }
+      responses:
+        '201':
+          description: Feedback ricevuto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackRicevuto'
+              example: { id: 413, ricevuto_il: '2026-11-20T12:30:00+01:00' }
+        '422':
+          description: Dati non validi (voto fuori da 1-5, ruolo o punto inesistente, commento troppo lungo)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errore' }
+              example: { errore: { codice: dati_non_validi, messaggio: "Il voto deve essere un numero intero da 1 a 5." } }
 
   /api/donazioni:
     post:
@@ -406,6 +472,74 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Errore' }
               example: { errore: { codice: dati_non_validi, messaggio: "La categoria 99 non esiste." } }
+
+  /api/caricamenti:
+    post:
+      tags: [Caricamenti]
+      operationId: caricaFile
+      summary: Carica il file Excel settimanale di giacenze o scarti
+      description: |
+        Riservato a coordinatore e admin. Il backend salva il file così com'è nell'area di staging
+        e registra il caricamento con `stato = in_attesa`. La pipeline lo pulisce e lo controlla con le stesse regole
+        del caricamento iniziale, carica le righe valide e scrive l'esito (righe caricate, scartate e perché).
+        Subito dopo vengono ricalcolati i risultati dei modelli. Le righe che non passano i controlli non entrano nel database.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [tipo, file]
+              properties:
+                tipo: { type: string, enum: [giacenze, scarti] }
+                file: { type: string, format: binary, description: "File .xlsx, al massimo 5 MB" }
+      responses:
+        '202':
+          description: File ricevuto, in attesa di elaborazione
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Caricamento'
+              example: { id: 18, tipo: giacenze, nome_file: giacenze_2026-11-23.xlsx, caricato_il: '2026-11-23T09:05:00+01:00', stato: in_attesa, elaborato_il: null, righe_lette: null, righe_caricate: null, righe_scartate: null, errori: [] }
+        '422':
+          description: File non accettato (non è un .xlsx, è troppo grande, tipo sconosciuto)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errore' }
+              example: { errore: { codice: file_non_valido, messaggio: "Il file deve essere un Excel .xlsx." } }
+    get:
+      tags: [Caricamenti]
+      operationId: leggiCaricamenti
+      summary: Ultimi caricamenti con il loro esito e la data dell'ultimo aggiornamento dei dati
+      description: |
+        Dal più recente. `ultimo_aggiornamento` è l'ultimo caricamento completato: l'app lo mostra
+        in alto come "Dati aggiornati al…".
+      parameters:
+        - name: limite
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        '200':
+          description: Elenco dei caricamenti
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Caricamenti'
+              example:
+                ultimo_aggiornamento: '2026-11-23T09:06:40+01:00'
+                caricamenti:
+                  - id: 18
+                    tipo: giacenze
+                    nome_file: giacenze_2026-11-23.xlsx
+                    caricato_il: '2026-11-23T09:05:00+01:00'
+                    stato: completato_con_scarti
+                    elaborato_il: '2026-11-23T09:06:40+01:00'
+                    righe_lette: 98
+                    righe_caricate: 96
+                    righe_scartate: 2
+                    errori:
+                      - { riga: 14, motivo: "Data illeggibile: '31/02/2026'" }
+                      - { riga: 57, motivo: "Punto sconosciuto: 'Punto Rivoli'" }
 
 components:
   parameters:
@@ -559,7 +693,7 @@ components:
         settimana: { type: string, format: date }
         trasferimenti:
           type: array
-          description: (trasferimento_suggerito, nuova in v0.5)
+          description: (trasferimento_suggerito, aggiunta in v1.0)
           items:
             type: object
             required: [id, da_punto_id, a_punto_id, categoria_id, categoria, kg, motivo, messaggio_volontari, volontari_suggeriti, stato]
@@ -595,7 +729,7 @@ components:
         stato: { type: string, enum: [pianificato, coperto, parziale, scoperto, sostituito] }
         sostituto_id: { type: string, nullable: true }
         ore_pianificate: { type: number }
-        probabilita_scoperto: { type: number, nullable: true, minimum: 0, maximum: 1, description: "(rischio_assegnazione, nuova in v0.5) null se manca la stima" }
+        probabilita_scoperto: { type: number, nullable: true, minimum: 0, maximum: 1, description: "(rischio_assegnazione, aggiunta in v1.0) null se manca la stima" }
         rischio: { type: string, nullable: true, enum: [alto, medio, basso, null], description: "null se manca la stima" }
 
     TurnoBreve:
@@ -645,7 +779,7 @@ components:
         turno: { $ref: '#/components/schemas/TurnoBreve' }
         sostituti:
           type: array
-          description: (sostituto_suggerito, nuova in v0.5) al massimo 5, ordinati per posizione
+          description: (sostituto_suggerito, aggiunta in v1.0) al massimo 5, ordinati per posizione
           items:
             type: object
             required: [posizione, volontario_id, nome, punteggio, motivi]
@@ -708,7 +842,7 @@ components:
 
     Messaggi:
       type: object
-      required: [totale, pagina, per_pagina, conteggi_per_categoria, messaggi]
+      required: [totale, pagina, per_pagina, conteggi_per_categoria, soddisfazione, messaggi]
       properties:
         totale: { type: integer }
         pagina: { type: integer }
@@ -720,6 +854,29 @@ components:
             properties:
               categoria: { $ref: '#/components/schemas/CategoriaMessaggio' }
               n: { type: integer }
+        soddisfazione:
+          type: object
+          description: (messaggio, fonti recensione e feedback_app)
+          required: [voto_medio, n_voti, sentiment, mensile]
+          properties:
+            voto_medio: { type: number, nullable: true, minimum: 1, maximum: 5, description: "null se nel periodo non ci sono voti" }
+            n_voti: { type: integer }
+            sentiment:
+              type: object
+              description: Numero di messaggi per sentiment (recensioni e feedback)
+              properties:
+                negativo: { type: integer }
+                neutro: { type: integer }
+                positivo: { type: integer }
+            mensile:
+              type: array
+              items:
+                type: object
+                required: [mese, voto_medio, n_voti]
+                properties:
+                  mese: { type: string, example: '2026-10' }
+                  voto_medio: { type: number, nullable: true }
+                  n_voti: { type: integer }
         messaggi:
           type: array
           description: (messaggio)
@@ -728,13 +885,17 @@ components:
             required: [id, fonte, ricevuto_il, testo_anonimizzato, categoria_predetta, confidenza]
             properties:
               id: { type: integer }
-              fonte: { type: string, enum: [email, chat_volontari, nota_operatore, recensione] }
+              fonte: { type: string, enum: [email, chat_volontari, nota_operatore, recensione, feedback_app] }
               ricevuto_il: { type: string, format: date-time }
-              autore_ruolo: { type: string, nullable: true, enum: [donatore, partner, ente_pubblico, volontario, operatore, visitatore, altro] }
+              autore_ruolo: { type: string, nullable: true, enum: [donatore, partner, ente_pubblico, volontario, operatore, visitatore, beneficiario, altro, null] }
+              punto_id: { type: string, nullable: true, pattern: '^PR\d{2}$', description: "Punto a cui si riferisce (feedback); altrimenti null" }
+              voto: { type: integer, nullable: true, minimum: 1, maximum: 5, description: "Solo recensioni e feedback dall'app" }
               oggetto: { type: string, nullable: true }
               testo_anonimizzato: { type: string }
               categoria_predetta: { type: string, nullable: true, description: "Una delle CategoriaMessaggio; null se il messaggio non è ancora classificato" }
               confidenza: { type: number, nullable: true, minimum: 0, maximum: 1 }
+              sentiment: { type: string, nullable: true, enum: [negativo, neutro, positivo, null], description: "Scritto dal modello di sentiment; null se non ancora calcolato" }
+              sentiment_punteggio: { type: number, nullable: true, minimum: -1, maximum: 1, description: "Da -1 (molto negativo) a +1 (molto positivo)" }
               entita_estratte:
                 type: object
                 nullable: true
@@ -744,6 +905,55 @@ components:
                   quantita: { type: number, nullable: true }
                   unita: { type: string, nullable: true, enum: [kg, pz, null] }
                   data: { type: string, format: date, nullable: true }
+
+    Caricamento:
+      type: object
+      description: (caricamento, aggiunta in v1.1)
+      required: [id, tipo, nome_file, caricato_il, stato, elaborato_il, righe_lette, righe_caricate, righe_scartate, errori]
+      properties:
+        id: { type: integer }
+        tipo: { type: string, enum: [giacenze, scarti] }
+        nome_file: { type: string }
+        caricato_il: { type: string, format: date-time }
+        stato: { type: string, enum: [in_attesa, in_elaborazione, completato, completato_con_scarti, errore] }
+        elaborato_il: { type: string, format: date-time, nullable: true }
+        righe_lette: { type: integer, nullable: true }
+        righe_caricate: { type: integer, nullable: true }
+        righe_scartate: { type: integer, nullable: true }
+        errori:
+          type: array
+          description: Righe scartate e perché (vuoto se nessuna)
+          items:
+            type: object
+            required: [riga, motivo]
+            properties:
+              riga: { type: integer }
+              motivo: { type: string }
+
+    Caricamenti:
+      type: object
+      required: [ultimo_aggiornamento, caricamenti]
+      properties:
+        ultimo_aggiornamento: { type: string, format: date-time, nullable: true, description: "Fine dell'ultimo caricamento completato; null se nessuno" }
+        caricamenti:
+          type: array
+          items: { $ref: '#/components/schemas/Caricamento' }
+
+    NuovoFeedback:
+      type: object
+      required: [ruolo_autore, voto]
+      properties:
+        ruolo_autore: { type: string, enum: [volontario, beneficiario, donatore, visitatore] }
+        punto_id: { type: string, nullable: true, pattern: '^PR\d{2}$', description: "Punto valutato; facoltativo" }
+        voto: { type: integer, minimum: 1, maximum: 5, description: "1 = molto insoddisfatto, 5 = molto soddisfatto" }
+        commento: { type: string, nullable: true, maxLength: 1000, description: "Facoltativo. Si chiede di non scrivere nomi o numeri di telefono" }
+
+    FeedbackRicevuto:
+      type: object
+      required: [id, ricevuto_il]
+      properties:
+        id: { type: integer }
+        ricevuto_il: { type: string, format: date-time }
 
     NuovaDonazione:
       type: object
