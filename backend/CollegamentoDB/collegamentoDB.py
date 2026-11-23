@@ -16,7 +16,7 @@ class DatabaseManager:
         self.name = os.getenv("DB_NAME")
         
         # Costruisce la stringa di connessione
-        self.database_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+        self.database_url = f"postgresql+psycopg2://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
         
         # Crea il motore di SQLAlchemy e la fabbrica di sessioni
         self.engine = create_engine(self.database_url)
