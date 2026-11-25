@@ -1,0 +1,36 @@
+---
+
+### 2. Documentazione Generale del Backend (`BACKEND/README.md` – da aggiornare nel tempo)
+
+```markdown
+# Backend – Buby Solidale
+
+Documentazione generale del backend di **Buby Solidale** (team WSA).  
+Questo file viene aggiornato progressivamente con l'avanzamento dei moduli, degli endpoint e delle configurazioni.
+
+## 1. Stack Tecnologico
+* **Linguaggio:** Python 3.12+
+* **ORM & Database:** SQLAlchemy 2.x + PostgreSQL su Supabase (`psycopg2-binary`)
+* **Sicurezza:** `bcrypt` per la verifica delle password
+* **API & Validazione *(in integrazione)*:** FastAPI, Uvicorn, Pydantic (allineato a `docs/api/openapi.yaml` tramite `datamodel-code-generator`)
+* **Hosting previsto:** Render
+
+## 2. Architettura del Database
+Il database PostgreSQL su Supabase è suddiviso in due schemi principali per garantire la conformità GDPR:
+* **`solidale`**: tabelle operative (donazioni, giacenze, scarti, turni, messaggi, risultati modelli).
+* **`riservato`**: dati personali, anagrafiche identificative e credenziali di accesso (`utente`).
+
+## 3. Struttura del Progetto
+
+```text
+BACKEND/
+├── CollegamentoDB/
+│   └── collegamentoDB.py   # Engine SQLAlchemy e gestione sessioni
+├── models/
+│   └── utenti.py           # Modelli ORM divisi per tabella/area
+├── login/
+│   ├── login.py            # Logica autenticazione
+│   └── README.md           # Documentazione specifica del login
+├── main.py                 # Entry point dell'applicazione
+├── .env                    # Variabili d'ambiente locali (escluso da Git)
+└── requirements.txt        # Dipendenze Python del progetto
