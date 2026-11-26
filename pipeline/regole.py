@@ -1,9 +1,11 @@
 import pandas as pd
 
 
-def data(valore):
+def data(valore, allow_null=False):
     """Converte la data usando formati espliciti (restituisce stringa YYYY-MM-DD)."""
     if pd.isna(valore):
+        if allow_null:
+            return None
         raise ValueError("Data mancante (NaN)")
     if isinstance(valore, pd.Timestamp):
         return valore.strftime("%Y-%m-%d")
@@ -93,4 +95,55 @@ MAPPA_CATEGORIE = {
     "Detersivi e prodotti casa": "Detersivi e prodotti casa",
     "Detersivi": "Detersivi e prodotti casa",
     "Prodotti pulizia": "Detersivi e prodotti casa",
+}
+
+MAPPA_PUNTI = {
+    "PR01": "PR01",
+    "Barriera": "PR01",
+    "Punto Barriera": "PR01",
+    "Torino Barriera": "PR01",
+    "PR02": "PR02",
+    "Mirafiori": "PR02",
+    "Punto Mirafiori": "PR02",
+    "Torino Mirafiori": "PR02",
+    "PR03": "PR03",
+    "Moncalieri": "PR03",
+    "Punto Moncalieri": "PR03",
+    "PR04": "PR04",
+    "Collegno": "PR04",
+    "Punto Collegno": "PR04",
+    "PR05": "PR05",
+    "Chieri": "PR05",
+    "Punto Chieri": "PR05",
+    "PR06": "PR06",
+    "Nichelino": "PR06",
+    "Punto Nichelino": "PR06",
+    "PR07": "PR07",
+    "Venaria": "PR07",
+    "Punto Venaria": "PR07",
+    "Venaria Reale": "PR07",
+}
+
+MAPPA_CAUSALI_SCARTO = {
+    "scaduto": "scaduto",
+    "Scaduto": "scaduto",
+    "scad.": "scaduto",
+    "danneggiato": "danneggiato",
+    "Danneggiato": "danneggiato",
+    "rotto": "danneggiato",
+    "non idoneo": "non_idoneo",
+    "Non idoneo": "non_idoneo",
+    "da scartare": "non_idoneo",
+}
+
+MAPPA_STATI_TURNO = {
+    "coperto": "coperto",
+    "Coperto": "coperto",
+    "COPERTO": "coperto",
+    "scoperto": "scoperto",
+    "Scoperto": "scoperto",
+    "parziale": "parziale",
+    "Parziale": "parziale",
+    "sostituito": "sostituito",
+    "Sostituito": "sostituito",
 }
