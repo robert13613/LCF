@@ -1,98 +1,25 @@
 import re
 import pandas as pd
 
-# 1. DIZIONARIO DI MAPPATURA: 51 nomi grezzi -> 14 categorie canoniche
-MAPPA_CATEGORIE = {
-    # 1. Verdura fresca (in kg)
-    "Verdura fresca": "Verdura fresca",
-    "Verdura": "Verdura fresca",
-    "verdure": "Verdura fresca",
-    "Ortaggi": "Verdura fresca",
-    # 2. Carne e affettati confezionati (in kg)
-    "Carne e affettati confezionati": "Carne e affettati confezionati",
-    "Carne confezionata": "Carne e affettati confezionati",
-    "Salumi": "Carne e affettati confezionati",
-    "affettati": "Carne e affettati confezionati",
-    # 3. Latticini freschi (in kg)
-    "Latticini freschi": "Latticini freschi",
-    "latticini": "Latticini freschi",
-    "Formaggi/yogurt": "Latticini freschi",
-    "Yogurt": "Latticini freschi",
-    # 4. Pane e prodotti da forno (in kg)
-    "Pane e prodotti da forno": "Pane e prodotti da forno",
-    "Pane": "Pane e prodotti da forno",
-    "pane": "Pane e prodotti da forno",
-    "Prodotti da forno": "Pane e prodotti da forno",
-    # 5. Frutta fresca (in kg)
-    "Frutta fresca": "Frutta fresca",
-    "Frutta": "Frutta fresca",
-    "frutta": "Frutta fresca",
-    # 6. Latte UHT (in pz)
-    "Latte UHT": "Latte UHT",
-    "latte uht": "Latte UHT",
-    "Latte": "Latte UHT",
-    # 7. Pomodori pelati e passata (in pz)
-    "Pomodori pelati e passata": "Pomodori pelati e passata",
-    "Passata di pomodoro": "Pomodori pelati e passata",
-    "Pelati": "Pomodori pelati e passata",
-    "pomodoro": "Pomodori pelati e passata",
-    # 8. Legumi in scatola (in pz)
-    "Legumi in scatola": "Legumi in scatola",
-    "legumi scatola": "Legumi in scatola",
-    "Legumi": "Legumi in scatola",
-    "Fagioli/ceci": "Legumi in scatola",
-    # 9. Pasta secca (in kg)
-    "Pasta secca": "Pasta secca",
-    "Pasta secca (kg)": "Pasta secca",
-    "Pasta": "Pasta secca",
-    "pasta": "Pasta secca",
-    # 10. Riso (in kg)
-    "Riso": "Riso",
-    "Riso confezionato": "Riso",
-    "riso": "Riso",
-    # 11. Igiene personale (in pz)
-    "Igiene personale": "Igiene personale",
-    "igiene persona": "Igiene personale",
-    "Igiene": "Igiene personale",
-    "Saponi/shampoo": "Igiene personale",
-    # 12. Olio di semi (in pz)
-    "Olio di semi": "Olio di semi",
-    "Olio": "Olio di semi",
-    "olio": "Olio di semi",
-    # 13. Biscotti e merendine (in kg)
-    "Biscotti e merendine": "Biscotti e merendine",
-    "Biscotti/merende": "Biscotti e merendine",
-    "Biscotti": "Biscotti e merendine",
-    "merendine": "Biscotti e merendine",
-    # 14. Detersivi e prodotti casa (in pz)
-    "Detersivi e prodotti casa": "Detersivi e prodotti casa",
-    "Detersivi": "Detersivi e prodotti casa",
-    "Prodotti pulizia": "Detersivi e prodotti casa",
-}
-
-# 2. IPOTESI SUI PESI AL PEZZO (per le 6 categorie donate in pz/pezzi/n)
-PESO_PER_PEZZO_KG = {
-    "Latte UHT": 1.00,                  # 1 brick da 1 litro ≈ 1,0 kg
-    "Pomodori pelati e passata": 0.50,  # lattina pelati 400g / bottiglia passata 700g -> media 0,5 kg
-    "Legumi in scatola": 0.40,          # lattina standard da 400 g (peso totale) ≈ 0,4 kg
-    "Olio di semi": 0.92,               # bottiglia da 1 litro di olio di semi ≈ 0,92 kg
-    "Igiene personale": 0.30,           # flacone bagnoschiuma/shampoo/sapone ≈ 0,3 kg
-    "Detersivi e prodotti casa": 1.00,  # flacone detersivo piatti/bucato ≈ 1,0 kg
-}
+try:
+    from regole import data, MAPPA_CATEGORIE, CAT_TO_ID, CAT_TO_PESO_PZ
+except ImportError:
+    from pipeline.regole import data, MAPPA_CATEGORIE, CAT_TO_ID, CAT_TO_PESO_PZ
 
 
 def salva_mappa_csv(percorso_csv="mappa_categorie.csv"):
-    righe = []
-    for nome_grezzo, categoria in MAPPA_CATEGORIE.items():
-        peso_pz = PESO_PER_PEZZO_KG.get(categoria, None)
-        righe.append({
+    righe = [
+        {
             "nome_grezzo": nome_grezzo,
+            "categoria_id": CAT_TO_ID[categoria],
             "categoria": categoria,
-            "peso_stimato_kg_per_pz": peso_pz
-        })
+            "peso_medio_pz_kg": CAT_TO_PESO_PZ[categoria],
+        }
+        for nome_grezzo, categoria in MAPPA_CATEGORIE.items()
+    ]
     df_mappa = pd.DataFrame(righe)
     df_mappa.to_csv(percorso_csv, index=False, encoding="utf-8")
-    print(f"[OK] Salvato '{percorso_csv}' con {len(df_mappa)} prodotti mappati su {df_mappa['categoria'].nunique()} categorie.")
+    return df_mappa
 
 
 def separa_quantita(valore_str):
@@ -101,46 +28,76 @@ def separa_quantita(valore_str):
     match_unit = re.search(r"(kg|pz|pezzi|n\.?)", s)
     if not match_num or not match_unit:
         raise ValueError(f"Quantità illeggibile: {valore_str}")
-    numero = float(match_num.group(1))
-    unita_raw = match_unit.group(1)
-    unita = "kg" if unita_raw == "kg" else "pz"
+    numero = round(float(match_num.group(1)), 2)
+    unita = "kg" if match_unit.group(1) == "kg" else "pz"
     return pd.Series([numero, unita])
 
 
-def pulisci_donazioni(percorso_excel="donazioni_set2025_ott2026.xlsx", percorso_output="donazioni_pulite.csv"):
+def elabora_donazioni(percorso_excel="donazioni_set2025_ott2026.xlsx"):
     df = pd.read_excel(percorso_excel, sheet_name="Donazioni")
-    righe_iniziali = len(df)
+    righe_grezze = len(df)
 
-    # Rimozione duplicati esatti
-    df = df.drop_duplicates().copy()
-    print(f"[OK] Duplicati rimossi: {righe_iniziali - len(df)} (righe rimaste: {len(df)})")
+    df["id_donazione"] = df["id_donazione"].astype(str).str.strip()
+    df["data"] = df["data"].apply(data)
+    df["punto_id"] = df["punto_ritiro"].astype(str).str.strip()
+    df["prodotto_originale"] = df["prodotto"].astype(str).str.strip()
 
-    # Conversione date con dayfirst=True
-    df["data"] = pd.to_datetime(df["data"], dayfirst=True, format="mixed")
-    assert df["data"].isna().sum() == 0, "Trovate date non convertibili!"
+    df["donatore_id"] = df["codice_donatore"].apply(
+        lambda x: None if pd.isna(x) or str(x).strip() == "" else str(x).strip()
+    )
 
-    # Regex per separare numero e unità (kg / pz)
-    df[["quantita_valore", "unita"]] = df["quantita"].apply(separa_quantita)
+    df[["quantita", "unita"]] = df["quantita"].apply(separa_quantita)
+    df["categoria"] = df["prodotto_originale"].map(MAPPA_CATEGORIE)
+    df["categoria_id"] = df["categoria"].map(CAT_TO_ID)
+    df["kg_stimato"] = df["unita"] == "pz"
+    df["kg"] = df.apply(
+        lambda r: r["quantita"] if r["unita"] == "kg" else round(r["quantita"] * CAT_TO_PESO_PZ[r["categoria"]], 2),
+        axis=1,
+    )
 
-    # Mappatura sulle 14 categorie
-    df["categoria"] = df["prodotto"].map(MAPPA_CATEGORIE)
-    assert df["categoria"].isna().sum() == 0, "Trovati prodotti non mappati!"
+    df = df.drop_duplicates(
+        subset=["id_donazione", "data", "punto_id", "prodotto_originale", "quantita", "unita"]
+    ).copy()
 
-    # Calcolo peso stimato totale in kg (utile per KPI e capienze)
-    def calcola_kg(row):
-        if row["unita"] == "kg":
-            return row["quantita_valore"]
-        return round(row["quantita_valore"] * PESO_PER_PEZZO_KG[row["categoria"]], 2)
+    mappa_donatori = df.dropna(subset=["donatore_id"]).groupby("id_donazione")["donatore_id"].first()
+    df["donatore_id_testata"] = df["id_donazione"].map(mappa_donatori)
 
-    df["quantita_kg_stimata"] = df.apply(calcola_kg, axis=1)
+    df_donazione = (
+        df.groupby("id_donazione", as_index=False)
+        .agg(
+            data=("data", "first"),
+            donatore_id=("donatore_id_testata", "first"),
+            punto_id=("punto_id", "first"),
+        )
+        .rename(columns={"id_donazione": "id"})
+    )
+    df_donazione["canale"] = "storico"
+    df_donazione["messaggio_id"] = None
+    df_donazione["stato_corrente"] = "ricevuta"
+    df_donazione = df_donazione[["id", "data", "donatore_id", "punto_id", "canale", "messaggio_id", "stato_corrente"]]
 
-    # Pulizia spazi codice_donatore
-    df["codice_donatore"] = df["codice_donatore"].fillna("ANONIMO").str.strip()
+    df_riga = df[["id_donazione", "categoria_id", "prodotto_originale", "quantita", "unita", "kg", "kg_stimato"]].copy()
+    df_riga = df_riga.rename(columns={"id_donazione": "donazione_id"})
 
-    df.to_csv(percorso_output, index=False, encoding="utf-8")
-    print(f"[OK] Salvato '{percorso_output}'! Date illeggibili: 0 | Quantità illeggibili: 0")
+    df_donazione.to_csv("donazione.csv", index=False, encoding="utf-8")
+    df_riga.to_csv("donazione_riga.csv", index=False, encoding="utf-8")
+
+    assert len(MAPPA_CATEGORIE) == 51
+    assert df_riga["categoria_id"].nunique() == 14
+    assert df_riga["categoria_id"].isna().sum() == 0
+    assert df_donazione["data"].isna().sum() == 0
+    assert (df_riga["quantita"] > 0).all()
+    assert (df_riga["kg"] > 0).all()
+    assert df_riga["unita"].isin(["kg", "pz"]).all()
+    assert (df_donazione["donatore_id"] == "ANONIMO").sum() == 0
+    assert df_donazione["id"].nunique() == len(df_donazione)
+    assert set(df_riga["donazione_id"]).issubset(set(df_donazione["id"]))
+
+    print(f"[OK] Righe lette: {righe_grezze} | Duplicati rimossi: {righe_grezze - len(df_riga)}")
+    print(f"[OK] donazione.csv: {len(df_donazione)} righe ({df_donazione['donatore_id'].isna().sum()} senza donatore)")
+    print(f"[OK] donazione_riga.csv: {len(df_riga)} righe ({df_riga['kg'].sum():.2f} kg totali)")
 
 
 if __name__ == "__main__":
     salva_mappa_csv("mappa_categorie.csv")
-    pulisci_donazioni("donazioni_set2025_ott2026.xlsx", "donazioni_pulite.csv")
+    elabora_donazioni("donazioni_set2025_ott2026.xlsx")
