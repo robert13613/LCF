@@ -1,0 +1,30 @@
+# Modulo Login – Buby Solidale
+
+Documentazione tecnica della logica di autenticazione utenti del backend.
+
+## Scopo
+Il modulo verifica le credenziali inserite dall'utente confrontandole con i dati salvati nello schema `riservato` del database PostgreSQL (Supabase). In caso di successo, conferma l'accesso e restituisce il ruolo dell'utente (`amministratore`, `coordinatore`/`operatore`, `volontario`) e il suo `soggetto_id`.
+
+## Dipendenze del modulo
+* `login/login.py` – Contiene la logica di controllo e verifica password.
+* `models/utenti.py` – Modello SQLAlchemy `Utente` collegato alla tabella `riservato.utente`.
+* `CollegamentoDB/collegamentoDB.py` – Gestione della connessione e apertura/chiusura sessione DB.
+* `bcrypt` – Libreria utilizzata per verificare la password in chiaro rispetto all'hash salvato nel DB.
+
+## Tabella di riferimento (`riservato.utente`)
+
+| Colonna | Tipo | Utilizzo nel login |
+| :--- | :--- | :--- |
+| `id` | `Integer` (PK) | Restituito in caso di login riuscito |
+| `email` | `String` | Chiave di ricerca dell'utente |
+| `password_hash` | `String` | Hash `bcrypt` confrontato con la password inserita |
+| `ruolo` | `String` | Determina il livello di accesso dell'utente nell'app |
+| `soggetto_id` | `String` | Collega l'utenza alla relativa anagrafica (es. `OP01`) |
+| `attivo` | `Boolean` | Blocca l'accesso se impostato su `False` |
+
+## Funzione principale: `esegui_login(email: str, password: str) -> dict`
+
+### Flusso operativo
+1. Apre una sessione verso il database tramite `db.get_session()`.
+2. Cerca un record in `riservato.utente` con `email` corrispondente.
+3. Verifica che l'utente esista e che la password corrisponda a `password_hash` tramite
