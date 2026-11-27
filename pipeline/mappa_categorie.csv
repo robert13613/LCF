@@ -1,0 +1,52 @@
+nome_grezzo,categoria_id,categoria,peso_medio_pz_kg
+Verdura fresca,1,Verdura fresca,
+Verdura,1,Verdura fresca,
+verdure,1,Verdura fresca,
+Ortaggi,1,Verdura fresca,
+Carne e affettati confezionati,2,Carne e affettati confezionati,
+Carne confezionata,2,Carne e affettati confezionati,
+Salumi,2,Carne e affettati confezionati,
+affettati,2,Carne e affettati confezionati,
+Latticini freschi,3,Latticini freschi,
+latticini,3,Latticini freschi,
+Formaggi/yogurt,3,Latticini freschi,
+Yogurt,3,Latticini freschi,
+Pane e prodotti da forno,4,Pane e prodotti da forno,
+Pane,4,Pane e prodotti da forno,
+pane,4,Pane e prodotti da forno,
+Prodotti da forno,4,Pane e prodotti da forno,
+Frutta fresca,5,Frutta fresca,
+Frutta,5,Frutta fresca,
+frutta,5,Frutta fresca,
+Latte UHT,6,Latte UHT,1.0
+latte uht,6,Latte UHT,1.0
+Latte,6,Latte UHT,1.0
+Pomodori pelati e passata,7,Pomodori pelati e passata,0.5
+Passata di pomodoro,7,Pomodori pelati e passata,0.5
+Pelati,7,Pomodori pelati e passata,0.5
+pomodoro,7,Pomodori pelati e passata,0.5
+Legumi in scatola,8,Legumi in scatola,0.4
+legumi scatola,8,Legumi in scatola,0.4
+Legumi,8,Legumi in scatola,0.4
+Fagioli/ceci,8,Legumi in scatola,0.4
+Pasta secca,9,Pasta secca,
+Pasta secca (kg),9,Pasta secca,
+Pasta,9,Pasta secca,
+pasta,9,Pasta secca,
+Riso,10,Riso,
+Riso confezionato,10,Riso,
+riso,10,Riso,
+Igiene personale,11,Igiene personale,0.3
+igiene persona,11,Igiene personale,0.3
+Igiene,11,Igiene personale,0.3
+Saponi/shampoo,11,Igiene personale,0.3
+Olio di semi,12,Olio di semi,0.92
+Olio,12,Olio di semi,0.92
+olio,12,Olio di semi,0.92
+Biscotti e merendine,13,Biscotti e merendine,
+Biscotti/merende,13,Biscotti e merendine,
+Biscotti,13,Biscotti e merendine,
+merendine,13,Biscotti e merendine,
+Detersivi e prodotti casa,14,Detersivi e prodotti casa,1.0
+Detersivi,14,Detersivi e prodotti casa,1.0
+Prodotti pulizia,14,Detersivi e prodotti casa,1.0
