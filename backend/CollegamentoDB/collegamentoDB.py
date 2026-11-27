@@ -1,12 +1,14 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 class DatabaseManager:
     def __init__(self):
-        # Carica le variabili d'ambiente
-        load_dotenv()
+        # Carica le variabili d'ambiente dal file .env della cartella del database
+        env_path = Path(__file__).resolve().with_name(".env")
+        load_dotenv(env_path)
         
         # Recupera le credenziali
         self.user = os.getenv("DB_USER")
